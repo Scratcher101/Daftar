@@ -1,6 +1,6 @@
 // Daftar — service worker: keeps the app and its libraries available offline.
 // Model weights are cached separately by the AI libraries themselves, so they are not duplicated here.
-const CACHE = 'daftar-v1';
+const CACHE = 'daftar-v2';
 const SHELL = ['./', './index.html', './asr-worker.js', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 const CACHEABLE_HOSTS = ['cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 

@@ -236,6 +236,8 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
     </div>
 
     <div id="work" class="stack" hidden>
+      <div class="notice warn" id="flowError" hidden role="alert"></div>
+      <div class="hint" id="keepOpen" hidden>Keep Daftar open and on screen until the essay appears. If the screen locks or you switch apps, iOS pauses the writing.</div>
       <div class="progress" id="progress" hidden>
         <div class="pt"><span id="progLabel">Working</span><span id="progVal"></span></div>
         <div class="bar" id="progBar"><i></i></div>
@@ -246,9 +248,9 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
         <textarea id="transcript" dir="auto" aria-label="Transcript"></textarea>
         <div class="row">
           <button class="btn primary" id="writeBtn">Write the essay</button>
-          <button class="btn" id="saveRawBtn">Save as note</button>
-          <button class="btn" id="discardBtn">Discard</button>
+          <button class="btn" id="discardBtn">New recording</button>
         </div>
+        <span class="hint">Already saved in your Library.</span>
       </div>
 
       <article class="page" id="livePage" hidden></article>
@@ -314,10 +316,11 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
     <div class="setting">
       <span class="label">Writer</span>
       <div class="seg" id="segLlm">
+        <button data-v="0.5B">Tiny · ~400 MB</button>
         <button data-v="1.5B">Light · ~1 GB</button>
         <button data-v="3B">Rich · ~2 GB</button>
       </div>
-      <span class="hint">"Rich" writes noticeably better, especially in Arabic, but needs a recent iPhone Pro (8 GB memory).</span>
+      <span class="hint">"Rich" writes noticeably better, especially in Arabic, but needs a recent iPhone Pro (8 GB memory). "Tiny" works on any iPhone but writes more simply.</span>
     </div>
 
     <div class="setting">
@@ -326,6 +329,8 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
         <div class="pt"><span id="prepLabel"></span><span id="prepVal"></span></div>
         <div class="bar" id="prepBar"><i></i></div>
       </div>
+      <button class="btn" id="testBtn">Test the writer</button>
+      <div class="hint" id="testLog" hidden style="white-space:pre-wrap;font-variant-numeric:tabular-nums"></div>
       <div class="kv"><span>Transcription model</span><span id="kvAsr">Not downloaded</span></div>
       <div class="kv"><span>Writing model</span><span id="kvLlm">Not downloaded</span></div>
       <div class="kv"><span>Storage used by Daftar</span><span id="kvStorage">—</span></div>
@@ -567,19 +572,59 @@ async function toMono16k(blob) {
 }
 
 // ---------- the flow ----------
-let current = null; // entry being worked on
+let current = null;      // the library entry being worked on
+let working = false;     // true while transcribing or writing
+let busyWake = null;
+const WRITERS = { '3B': 'Rich', '1.5B': 'Light', '0.5B': 'Tiny' };
+async function keepAwake(on) {
+  try {
+    if (on && !busyWake) { busyWake = await navigator.wakeLock?.request('screen'); busyWake?.addEventListener?.('release', () => (busyWake = null)); }
+    if (!on && busyWake) { await busyWake.release(); busyWake = null; }
+  } catch {}
+}
+document.addEventListener('visibilitychange', () => {
+  if (!working) return;
+  if (document.visibilityState === 'hidden') store.set('daftar.wentBackground', true);
+  else keepAwake(true);
+});
+
 function setStage(stage) {
   $('#composer').hidden = stage !== 'idle';
   $('#work').hidden = stage === 'idle';
   $('#transcriptBox').hidden = stage !== 'transcript';
   $('#livePage').hidden = !(stage === 'writing' || stage === 'written');
   $('#afterWrite').hidden = stage !== 'written';
+  $('#keepOpen').hidden = !(stage === 'busy' || stage === 'writing');
   if (stage !== 'busy' && stage !== 'writing') hideProgress('prog');
+  if (stage === 'idle' || stage === 'busy' || stage === 'writing' || stage === 'written') hideError();
+}
+
+// Persistent, readable problem report (replaces short pop-ups)
+function showError(title, detail, actions = []) {
+  const box = $('#flowError');
+  box.innerHTML = `<strong>${esc(title)}</strong><div>${esc(detail)}</div>` +
+    (actions.length ? `<div class="row" style="margin-top:10px">${actions.map((a, i) => `<button class="btn small${i === 0 ? ' primary' : ''}" data-act="${i}">${esc(a.label)}</button>`).join('')}</div>` : '');
+  box.hidden = false;
+  box.onclick = (e) => { const b = e.target.closest('[data-act]'); if (b) actions[+b.dataset.act].run(); };
+  box.scrollIntoView({ block: 'nearest' });
+}
+function hideError() { $('#flowError').hidden = true; }
+
+function smallerWriter() { return settings.llm === '3B' ? '1.5B' : settings.llm === '1.5B' ? '0.5B' : null; }
+function recoveryActions(entry) {
+  const acts = [{ label: 'Try again', run: () => write(entry) }];
+  const smaller = smallerWriter();
+  if (smaller) acts.push({ label: `Use the ${WRITERS[smaller]} writer`, run: () => {
+    settings.llm = smaller; saveSettings(); $$('#segLlm button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === smaller))); refreshEngineStatus(); write(entry);
+  } });
+  acts.push({ label: 'Open in library', run: () => openReader(entry.id) });
+  return acts;
 }
 
 async function transcribe(blob) {
   setStage('busy'); progress('prog', 'Preparing audio', null);
-  recBtn.disabled = true;
+  recBtn.disabled = true; working = true; keepAwake(true);
+  let text = '';
   try {
     const audio = await toMono16k(blob);
     if (audio.length < 16000) throw new Error('That recording was too short. Try speaking for a few seconds.');
@@ -587,17 +632,33 @@ async function transcribe(blob) {
     const label = prepared.asr === settings.asr ? 'Transcribing on your phone' : 'Downloading the transcription model';
     progress('prog', label, null);
     const language = settings.spoken === 'en' ? 'english' : settings.spoken === 'ar' ? 'arabic' : undefined;
-    const text = await asrCall({ type: 'transcribe', audio, model: settings.asr, language },
+    text = await asrCall({ type: 'transcribe', audio, model: settings.asr, language },
       (p) => progress('prog', 'Downloading the transcription model', p.loaded / p.total, `${fmtMB(p.loaded)} of ${fmtMB(p.total)}`));
     if (prepared.asr !== settings.asr) { prepared.asr = settings.asr; store.set('daftar.prepared', prepared); refreshEngineStatus(); }
-    if (!text) throw new Error('No speech was detected. Check the microphone and try again.');
-    $('#transcript').value = text;
-    store.set('daftar.draft', text);
-    setStage('transcript');
+    if (!text) throw new Error('No speech was detected. Check that the microphone is not covered and try again.');
   } catch (err) {
-    setStage('idle'); toast(err.message);
-  } finally { recBtn.disabled = false; }
+    working = false; keepAwake(false); recBtn.disabled = false;
+    setStage('idle');
+    $('#envNotice').hidden = false;
+    $('#envNotice').innerHTML = `<div class="notice warn"><strong>Transcription didn't finish</strong>${esc(err.message)}</div>`;
+    return;
+  }
+  recBtn.disabled = false;
+
+  // Save immediately, so nothing you said is ever lost.
+  const now = Date.now();
+  current = { id: 'e' + now, created: now, transcript: text, essay: '', title: noteTitle(text), style: null, lang: isArabic(text) ? 'ar' : 'en' };
+  entries.push(current); saveEntries();
+  $('#transcript').value = text;
+
+  if (!gpuInfo.ok) {
+    working = false; keepAwake(false); setStage('transcript');
+    showError('Saved as a note', 'Your words are in the Library. Writing the essay needs WebGPU, which this iPhone does not have turned on (iOS 26 or later).');
+    return;
+  }
+  await write(current); // write automatically
 }
+function noteTitle(t) { return t.split(/\s+/).slice(0, 6).join(' ') + '…'; }
 
 function outLang(transcript) {
   if (settings.out === 'en') return 'en';
@@ -640,19 +701,31 @@ async function condense(eng, text, lang) {
   return notes.join('\n\n');
 }
 
-async function write(transcript, entryToReplace = null) {
+async function write(entry) {
+  const transcript = entry.transcript;
   const lang = outLang(transcript);
   const style = settings.style, length = settings.length;
-  setStage('writing');
+  current = entry;
+  show('speak'); setStage('writing');
   const page = $('#livePage'); page.innerHTML = ''; page.lang = lang; page.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  working = true; keepAwake(true);
+  store.set('daftar.wentBackground', false);
+  store.set('daftar.inflight', { id: entry.id, t: Date.now() }); // lets us explain a crash on next launch
+  const t0w = Date.now(); let clock = null;
   try {
     await asrCall({ type: 'unload' }).catch(() => {}); // free memory for the writer
     const downloading = prepared.llm !== llmId();
-    progress('prog', downloading ? 'Downloading the writing model' : 'Opening the writer', 0);
-    const eng = await loadWriter((r) => progress('prog', downloading ? 'Downloading the writing model' : 'Opening the writer', r.progress));
+    const loadLabel = downloading ? `Downloading the ${WRITERS[settings.llm]} writer (one time)` : 'Opening the writer';
+    progress('prog', loadLabel, 0);
+    const eng = await loadWriter((r) => progress('prog', loadLabel, r.progress));
     if (downloading) { prepared.llm = llmId(); store.set('daftar.prepared', prepared); refreshEngineStatus(); }
     const source = await condense(eng, transcript, lang);
-    progress('prog', 'Writing', null);
+    let words = 0, started = false;
+    const tickLabel = () => {
+      const s = Math.round((Date.now() - t0w) / 1000);
+      progress('prog', started ? 'Writing your essay' : 'Reading your thoughts', null, `${started ? words + ' words · ' : ''}${s}s`);
+    };
+    tickLabel(); clock = setInterval(tickLabel, 1000);
     const chunksIter = await eng.chat.completions.create({
       messages: [
         { role: 'system', content: systemPrompt(lang, style, length) },
@@ -661,36 +734,44 @@ async function write(transcript, entryToReplace = null) {
       stream: true, temperature: 0.75, top_p: 0.9, frequency_penalty: 0.3, max_tokens: LENGTH[length].tokens,
     });
     let out = '';
-    for await (const c of chunksIter) { out += c.choices[0]?.delta?.content || ''; renderEssay(page, out, true); }
+    for await (const c of chunksIter) {
+      const d = c.choices[0]?.delta?.content || '';
+      if (d) { started = true; out += d; words = out.trim().split(/\s+/).length; renderEssay(page, out, true); }
+    }
+    clearInterval(clock);
     out = out.trim();
+    if (!out) throw new Error('The writer returned an empty result.');
     renderEssay(page, out, false);
     hideProgress('prog');
-    const { title } = parseEssay(out);
-    const now = Date.now();
-    if (entryToReplace) {
-      Object.assign(entryToReplace, { essay: out, title, style, lang, updated: now });
-      current = entryToReplace;
-    } else {
-      current = { id: 'e' + now, created: now, transcript, essay: out, title, style, lang };
-      entries.push(current);
-    }
-    saveEntries(); store.set('daftar.draft', null);
+    Object.assign(entry, { essay: out, title: parseEssay(out).title, style, lang, updated: Date.now() });
+    saveEntries();
     setStage('written');
+    toast('Saved to your library');
   } catch (err) {
-    setStage('transcript'); toast(err.message);
+    clearInterval(clock);
+    $('#transcript').value = entry.transcript;
+    setStage('transcript');
+    const msg = String(err?.message || err);
+    const memory = /memory|OOM|allocate|device (was )?lost|DXGI|buffer/i.test(msg);
+    showError(
+      memory ? 'The iPhone ran out of memory while writing' : 'The essay could not be written',
+      (memory ? 'Close other apps, or switch to a smaller writer. ' : '') + 'Your words are saved in the Library. Details: ' + msg,
+      recoveryActions(entry)
+    );
+  } finally {
+    working = false; keepAwake(false);
+    store.set('daftar.inflight', null);
   }
 }
 
-$('#writeBtn').addEventListener('click', () => { const t = $('#transcript').value.trim(); if (t) write(t); else toast('The transcript is empty'); });
-$('#saveRawBtn').addEventListener('click', () => {
+$('#writeBtn').addEventListener('click', () => {
   const t = $('#transcript').value.trim(); if (!t) return;
-  const now = Date.now(); const lang = isArabic(t) ? 'ar' : 'en';
-  entries.push({ id: 'e' + now, created: now, transcript: t, essay: '', title: t.split(/\s+/).slice(0, 6).join(' ') + '…', style: null, lang });
-  saveEntries(); store.set('daftar.draft', null); toast('Saved to library'); setStage('idle');
+  if (!current) { const now = Date.now(); current = { id: 'e' + now, created: now, transcript: t, essay: '', title: noteTitle(t), style: null, lang: isArabic(t) ? 'ar' : 'en' }; entries.push(current); }
+  current.transcript = t; saveEntries(); write(current);
 });
-$('#discardBtn').addEventListener('click', () => { store.set('daftar.draft', null); setStage('idle'); });
+$('#discardBtn').addEventListener('click', () => { current = null; setStage('idle'); $('#timer').textContent = '0:00'; });
 $('#newBtn').addEventListener('click', () => { current = null; setStage('idle'); $('#timer').textContent = '0:00'; });
-$('#rewriteBtn').addEventListener('click', () => { if (current) write(current.transcript, current); });
+$('#rewriteBtn').addEventListener('click', () => { if (current) write(current); });
 $('#openSavedBtn').addEventListener('click', () => { if (current) openReader(current.id); });
 
 // ---------- rendering essays ----------
@@ -723,7 +804,7 @@ function renderLibrary() {
   const sorted = [...entries].sort((a, b) => b.created - a.created);
   box.innerHTML = '<div class="list">' + sorted.map((e) => {
     const excerpt = parseEssay(e.essay || e.transcript).body.replace(/\s+/g, ' ').slice(0, 180);
-    const chip = e.style ? `<span class="chip">${STYLES[e.style]?.name || ''}</span>` : '<span class="chip">Note</span>';
+    const chip = e.style ? `<span class="chip">${STYLES[e.style]?.name || ''}</span>` : '<span class="chip">Not written yet</span>';
     return `<button class="item" data-id="${e.id}"><span class="t" lang="${e.lang}" dir="auto">${esc(e.title || 'Untitled')}</span><span class="d">${fmtDate(e.created)}</span><span class="x" dir="auto">${chip}${esc(excerpt)}</span></button>`;
   }).join('') + '</div>';
 }
@@ -764,7 +845,7 @@ $('#editBtn').addEventListener('click', () => {
 });
 $('#readerRewriteBtn').addEventListener('click', () => {
   const e = readerEntry(); if (!e) return;
-  show('speak'); $('#transcript').value = e.transcript; write(e.transcript, e);
+  $('#transcript').value = e.transcript; write(e);
 });
 $('#deleteBtn').addEventListener('click', () => ($('#deleteConfirm').hidden = false));
 $('#deleteNo').addEventListener('click', () => ($('#deleteConfirm').hidden = true));
@@ -806,13 +887,46 @@ h1{font-weight:normal;font-size:1.7em;line-height:1.25}section[lang=ar]{font-fam
   deliverFile(safeName() + '.html', 'text/html', html);
 });
 
+// ---------- writer self-test ----------
+$('#testBtn').addEventListener('click', async () => {
+  const btn = $('#testBtn'), log = $('#testLog'); btn.disabled = true; log.hidden = false;
+  const t0 = Date.now(); const lines = [];
+  const add = (m) => { lines.push(`${((Date.now() - t0) / 1000).toFixed(1)}s  ${m}`); log.textContent = lines.join('\n'); };
+  working = true; keepAwake(true);
+  try {
+    add(gpuInfo.ok ? `WebGPU available${gpuInfo.f16 ? ' (16-bit)' : ''}` : 'WebGPU NOT available');
+    add('Model: ' + llmId());
+    await asrCall({ type: 'unload' }).catch(() => {});
+    let last = -1;
+    const eng = await loadWriter((r) => { const p = Math.round((r.progress || 0) * 10); if (p !== last) { last = p; add('Loading ' + p * 10 + '%'); } });
+    add('Writer loaded. Generating a test sentence…');
+    const r = await eng.chat.completions.create({ messages: [{ role: 'user', content: 'Write one short sentence about the value of quiet reflection.' }], max_tokens: 60, temperature: 0.7 });
+    add('Result: ' + (r.choices[0]?.message?.content || '(empty)').trim());
+    add('The writer works.');
+    if (prepared.llm !== llmId()) { prepared.llm = llmId(); store.set('daftar.prepared', prepared); refreshEngineStatus(); }
+  } catch (err) {
+    add('FAILED: ' + (err?.message || err));
+  } finally { btn.disabled = false; working = false; keepAwake(false); }
+});
+
 // ---------- start ----------
 await checkGPU();
 envNotices();
 refreshEngineStatus();
 setStage('idle');
-const draft = store.get('daftar.draft', null);
-if (draft) { $('#transcript').value = draft; setStage('transcript'); toast('Your last unsaved transcript was restored'); }
+const inflight = store.get('daftar.inflight', null);
+if (inflight) {
+  store.set('daftar.inflight', null);
+  const e = entries.find((x) => x.id === inflight.id);
+  if (e) {
+    current = e; $('#transcript').value = e.transcript; setStage('transcript');
+    const bg = store.get('daftar.wentBackground', false);
+    showError('Writing stopped before it finished',
+      bg ? 'Daftar was closed, or the screen locked, while it was writing. Your words are saved. Tap Try again and keep Daftar on screen until the essay appears.'
+         : 'The iPhone most likely ran out of memory. Your words are saved. Close other apps and try again, or switch to a smaller writer.',
+      recoveryActions(e));
+  }
+}
 if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
 </body>
