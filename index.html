@@ -1,0 +1,819 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Daftar</title>
+<meta name="description" content="Speak your thoughts. Daftar writes them as a philosophical essay, fully offline.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Daftar">
+<meta name="theme-color" content="#f5f5f1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14161c" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Spectral:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: a single reading column, like a notebook page; controls in a quiet UI face, writing in a book face. */
+:root {
+  --paper: #f5f5f1;
+  --sheet: #ffffff;
+  --ink: #1c2230;
+  --muted: #5e6576;
+  --rule: #dddee4;
+  --accent: #2c3d8c;
+  --accent-ink: #ffffff;
+  --accent-soft: #e7eaf7;
+  --rec: #b3261e;
+  --ok: #2e7d4f;
+  --warn: #8a5a00;
+  --f-ui: "IBM Plex Sans", "IBM Plex Sans Arabic", -apple-system, system-ui, sans-serif;
+  --f-book: "Spectral", "Amiri", Georgia, "Times New Roman", serif;
+  --f-ar: "Amiri", "Spectral", "Geeza Pro", serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #14161c; --sheet: #1b1e26; --ink: #e8e9ef; --muted: #9ca3b4; --rule: #2d313c;
+    --accent: #a3b3ff; --accent-ink: #10132a; --accent-soft: #252b45; --rec: #ff6b5e; --ok: #74d29c; --warn: #f0c060;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #14161c; --sheet: #1b1e26; --ink: #e8e9ef; --muted: #9ca3b4; --rule: #2d313c;
+  --accent: #a3b3ff; --accent-ink: #10132a; --accent-soft: #252b45; --rec: #ff6b5e; --ok: #74d29c; --warn: #f0c060;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body {
+  background: var(--paper); color: var(--ink);
+  font: 15px/1.5 var(--f-ui);
+  -webkit-text-size-adjust: 100%;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+}
+.wrap { max-width: 640px; margin: 0 auto; padding-inline: 18px; padding-block: 8px 24px; }
+
+header.top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-block: 14px 6px; }
+.mark { font-family: var(--f-book); font-style: italic; font-size: 30px; letter-spacing: -0.01em; margin: 0; }
+.mark .ar { font-family: var(--f-ar); font-style: normal; font-size: 24px; color: var(--muted); margin-inline-start: 8px; }
+.status-dot { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.status-dot i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
+.status-dot.ready i { background: var(--ok); }
+
+h2 { font-family: var(--f-book); font-weight: 500; font-size: 22px; margin: 0; text-wrap: balance; }
+.label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.hint { color: var(--muted); font-size: 13px; }
+.stack { display: flex; flex-direction: column; gap: 16px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+.notice { border: 1px solid var(--rule); background: var(--sheet); border-radius: 10px; padding: 12px 14px; font-size: 13.5px; }
+.notice.warn { border-color: color-mix(in srgb, var(--warn) 45%, var(--rule)); }
+.notice strong { display: block; margin-bottom: 2px; }
+
+/* segmented choices */
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg button { font: 500 13.5px var(--f-ui); color: var(--ink); background: transparent; border: 1px solid var(--rule); border-radius: 999px; padding: 7px 13px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+.styles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.style-card { text-align: start; font: inherit; color: var(--ink); background: var(--sheet); border: 1px solid var(--rule); border-radius: 10px; padding: 10px 12px; cursor: pointer; min-width: 0; }
+.style-card b { display: block; font-family: var(--f-book); font-weight: 600; font-size: 15.5px; }
+.style-card span { display: block; font-size: 12.5px; color: var(--muted); line-height: 1.35; margin-top: 2px; }
+.style-card[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--accent-soft); }
+
+/* recorder */
+.recorder { display: flex; flex-direction: column; align-items: center; gap: 10px; padding-block: 22px 8px; }
+.rec-btn { width: 132px; height: 132px; border-radius: 50%; border: none; cursor: pointer; background: var(--sheet); position: relative;
+  box-shadow: 0 0 0 1px var(--rule), 0 10px 30px -12px rgba(20,30,60,.35); display: grid; place-items: center; transition: transform .15s; }
+.rec-btn:active { transform: scale(.97); }
+.rec-btn .core { width: 54px; height: 54px; border-radius: 50%; background: var(--rec); transition: border-radius .2s, width .2s, height .2s; }
+.rec-btn.on .core { width: 40px; height: 40px; border-radius: 8px; }
+.rec-btn .ring { position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--rec); opacity: 0; transform: scale(var(--lvl, 1)); transition: transform .08s linear, opacity .2s; }
+.rec-btn.on .ring { opacity: .55; }
+.rec-btn:disabled { opacity: .5; cursor: default; }
+.timer { font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 500; letter-spacing: .02em; }
+.rec-caption { color: var(--muted); font-size: 13px; text-align: center; max-width: 30ch; }
+
+/* buttons */
+.btn { font: 600 14.5px var(--f-ui); border-radius: 10px; padding: 11px 16px; border: 1px solid var(--rule); background: var(--sheet); color: var(--ink); cursor: pointer; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.danger { color: var(--rec); }
+.btn.small { padding: 7px 12px; font-size: 13px; }
+.btn:disabled { opacity: .5; cursor: default; }
+button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* progress */
+.progress { display: flex; flex-direction: column; gap: 6px; }
+.bar { height: 6px; border-radius: 3px; background: var(--rule); overflow: hidden; }
+.bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.bar.indet > i { width: 35%; animation: slide 1.2s ease-in-out infinite; }
+@keyframes slide { 0% { transform: translateX(-100%);} 100% { transform: translateX(300%);} }
+.progress .pt { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+textarea, input[type="text"], select {
+  width: 100%; font: 16px/1.55 var(--f-ui); color: var(--ink); background: var(--sheet);
+  border: 1px solid var(--rule); border-radius: 10px; padding: 10px 12px;
+}
+textarea { min-height: 140px; resize: vertical; }
+
+/* the page: where essays are read */
+.page { background: var(--sheet); border: 1px solid var(--rule); border-radius: 4px; padding: 26px 22px 30px; font-family: var(--f-book); font-size: 18px; line-height: 1.7; min-width: 0; overflow-wrap: break-word; }
+.page h1 { font-family: var(--f-book); font-weight: 500; font-size: 27px; line-height: 1.25; margin: 0 0 18px; text-wrap: balance; }
+.page h3 { font-weight: 600; font-size: 19px; margin: 20px 0 6px; }
+.page p { margin: 0 0 14px; max-width: 65ch; }
+.page p:first-of-type::first-letter { font-size: 2.6em; float: inline-start; line-height: .9; padding-inline-end: 6px; padding-top: 4px; font-weight: 500; }
+.page[lang="ar"] { font-family: var(--f-ar); font-size: 21px; line-height: 1.9; }
+.page[lang="ar"] h1 { font-family: var(--f-ar); font-weight: 700; font-size: 30px; }
+.page[lang="ar"] p:first-of-type::first-letter { font-size: inherit; float: none; padding: 0; }
+.page .meta { font-family: var(--f-ui); font-size: 12px; color: var(--muted); letter-spacing: .04em; margin-bottom: 6px; }
+.page .caret { display: inline-block; width: .5em; height: 1em; background: var(--accent); vertical-align: -0.12em; animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+
+details.transcript { border-top: 1px solid var(--rule); padding-top: 10px; }
+details.transcript summary { cursor: pointer; color: var(--muted); font-size: 13.5px; }
+details.transcript div { white-space: pre-wrap; font-size: 14px; color: var(--muted); margin-top: 8px; }
+
+/* library */
+.list { display: flex; flex-direction: column; border-top: 1px solid var(--rule); }
+.item { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 14px 2px; border-bottom: 1px solid var(--rule); background: none; border-inline: none; border-top: none; text-align: start; font: inherit; color: var(--ink); cursor: pointer; width: 100%; }
+.item .t { font-family: var(--f-book); font-size: 18px; font-weight: 500; min-width: 0; }
+.item .t[lang="ar"] { font-family: var(--f-ar); font-size: 20px; }
+.item .d { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.item .x { grid-column: 1 / -1; font-size: 13.5px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.chip { display: inline-block; font-size: 11px; border: 1px solid var(--rule); border-radius: 999px; padding: 1px 8px; color: var(--muted); margin-inline-end: 6px; }
+.empty { text-align: center; padding: 40px 10px; color: var(--muted); }
+.empty b { display: block; font-family: var(--f-book); font-size: 20px; color: var(--ink); font-weight: 500; margin-bottom: 4px; }
+
+/* book */
+.book-cover { text-align: center; padding: 34px 18px 28px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 4px; }
+.book-cover input { text-align: center; font-family: var(--f-book); font-size: 26px; border: none; border-bottom: 1px solid var(--rule); border-radius: 0; background: transparent; padding: 4px; }
+.chapter-no { font-family: var(--f-ui); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+
+/* settings */
+.setting { display: flex; flex-direction: column; gap: 8px; padding-block: 14px; border-bottom: 1px solid var(--rule); }
+.kv { display: flex; justify-content: space-between; gap: 10px; font-size: 13.5px; }
+.kv span:last-child { color: var(--muted); text-align: end; }
+
+/* tab bar */
+nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; background: color-mix(in srgb, var(--paper) 92%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border-top: 1px solid var(--rule); display: grid; grid-template-columns: repeat(4, 1fr); padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)); z-index: 5; }
+nav.tabs button { font: 500 11.5px var(--f-ui); background: none; border: none; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0; cursor: pointer; }
+nav.tabs button svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+nav.tabs button[aria-current="page"] { color: var(--accent); }
+
+.confirm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13.5px; }
+.toast { position: fixed; left: 50%; bottom: calc(86px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 9px 14px; border-radius: 999px; font-size: 13.5px; z-index: 9; max-width: calc(100% - 32px); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1 class="mark">Daftar<span class="ar">دفتر</span></h1>
+    <span class="status-dot" id="engineStatus"><i></i><span>Not prepared</span></span>
+  </header>
+
+  <!-- SPEAK -->
+  <section id="view-speak" class="stack">
+    <div id="envNotice" hidden></div>
+
+    <div id="prepCard" class="notice" hidden>
+      <strong>One-time setup</strong>
+      Download the voice and writing models while you're online. After that, Daftar works with no connection.
+      <div class="row" style="margin-top:10px"><button class="btn primary small" data-go="settings">Set up offline engine</button></div>
+    </div>
+
+    <div class="stack" id="composer">
+      <div class="recorder">
+        <button class="rec-btn" id="recBtn" aria-label="Start listening"><span class="ring"></span><span class="core"></span></button>
+        <div class="timer" id="timer">0:00</div>
+        <div class="rec-caption" id="recCaption">Tap to start. Think out loud. Tap again when you're done.</div>
+      </div>
+      <div class="stack" style="gap:8px">
+        <span class="label">I'll speak in</span>
+        <div class="seg" id="segSpoken">
+          <button data-v="en">English</button>
+          <button data-v="ar">العربية</button>
+          <button data-v="auto">Detect</button>
+        </div>
+      </div>
+
+      <div class="stack" style="gap:8px">
+        <span class="label">Essay style</span>
+        <div class="styles" id="styleGrid"></div>
+      </div>
+
+      <div class="row" style="justify-content:space-between">
+        <div class="stack" style="gap:8px">
+          <span class="label">Length</span>
+          <div class="seg" id="segLength">
+            <button data-v="short">Short</button>
+            <button data-v="medium">Medium</button>
+            <button data-v="long">Long</button>
+          </div>
+        </div>
+        <div class="stack" style="gap:8px">
+          <span class="label">Write in</span>
+          <div class="seg" id="segOut">
+            <button data-v="same">Same</button>
+            <button data-v="en">EN</button>
+            <button data-v="ar">عربي</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div id="work" class="stack" hidden>
+      <div class="progress" id="progress" hidden>
+        <div class="pt"><span id="progLabel">Working</span><span id="progVal"></span></div>
+        <div class="bar" id="progBar"><i></i></div>
+      </div>
+
+      <div id="transcriptBox" class="stack" hidden style="gap:8px">
+        <span class="label">What you said <span style="text-transform:none;letter-spacing:0;font-weight:400">· edit anything before writing</span></span>
+        <textarea id="transcript" dir="auto" aria-label="Transcript"></textarea>
+        <div class="row">
+          <button class="btn primary" id="writeBtn">Write the essay</button>
+          <button class="btn" id="saveRawBtn">Save as note</button>
+          <button class="btn" id="discardBtn">Discard</button>
+        </div>
+      </div>
+
+      <article class="page" id="livePage" hidden></article>
+      <div class="row" id="afterWrite" hidden>
+        <button class="btn primary" id="newBtn">New recording</button>
+        <button class="btn" id="rewriteBtn">Write another version</button>
+        <button class="btn" id="openSavedBtn">Open in library</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- LIBRARY -->
+  <section id="view-library" class="stack" hidden>
+    <h2>Library</h2>
+    <div id="libList"></div>
+  </section>
+
+  <!-- READER -->
+  <section id="view-reader" class="stack" hidden>
+    <div class="row"><button class="btn small" id="backBtn">← Library</button></div>
+    <article class="page" id="readerPage"></article>
+    <textarea id="readerEdit" dir="auto" hidden style="min-height:340px" aria-label="Edit essay"></textarea>
+    <div class="row" id="readerActions">
+      <button class="btn" id="copyBtn">Copy</button>
+      <button class="btn" id="shareBtn">Share</button>
+      <button class="btn" id="editBtn">Edit</button>
+      <button class="btn" id="readerRewriteBtn">Rewrite</button>
+      <button class="btn danger" id="deleteBtn">Delete</button>
+    </div>
+    <div class="confirm" id="deleteConfirm" hidden>Delete this piece permanently? <button class="btn small danger" id="deleteYes">Delete</button><button class="btn small" id="deleteNo">Keep</button></div>
+    <details class="transcript"><summary>Original transcript</summary><div id="readerTranscript" dir="auto"></div></details>
+  </section>
+
+  <!-- BOOK -->
+  <section id="view-book" class="stack" hidden>
+    <div class="book-cover">
+      <div class="label" style="margin-bottom:10px">Your book</div>
+      <input type="text" id="bookTitle" dir="auto" aria-label="Book title">
+      <div class="hint" id="bookCount" style="margin-top:10px"></div>
+    </div>
+    <div class="row">
+      <button class="btn primary" id="exportHtml">Export book</button>
+      <button class="btn" id="exportTxt">Export as text</button>
+      <button class="btn" id="bookOrder">Newest first</button>
+    </div>
+    <div id="bookBody" class="stack"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="view-settings" class="stack" hidden>
+    <h2>Offline engine</h2>
+    <div class="hint">Both models run on this iPhone. Download them once on Wi-Fi; afterwards nothing you say leaves the device.</div>
+
+    <div class="setting">
+      <span class="label">Voice transcription</span>
+      <div class="seg" id="segAsr">
+        <button data-v="base">Standard · ~200 MB</button>
+        <button data-v="small">Better Arabic · ~600 MB</button>
+      </div>
+      <span class="hint">Use "Better Arabic" if you mostly speak Arabic. It is slower to transcribe.</span>
+    </div>
+
+    <div class="setting">
+      <span class="label">Writer</span>
+      <div class="seg" id="segLlm">
+        <button data-v="1.5B">Light · ~1 GB</button>
+        <button data-v="3B">Rich · ~2 GB</button>
+      </div>
+      <span class="hint">"Rich" writes noticeably better, especially in Arabic, but needs a recent iPhone Pro (8 GB memory).</span>
+    </div>
+
+    <div class="setting">
+      <button class="btn primary" id="prepareBtn">Download for offline use</button>
+      <div class="progress" id="prepProgress" hidden>
+        <div class="pt"><span id="prepLabel"></span><span id="prepVal"></span></div>
+        <div class="bar" id="prepBar"><i></i></div>
+      </div>
+      <div class="kv"><span>Transcription model</span><span id="kvAsr">Not downloaded</span></div>
+      <div class="kv"><span>Writing model</span><span id="kvLlm">Not downloaded</span></div>
+      <div class="kv"><span>Storage used by Daftar</span><span id="kvStorage">—</span></div>
+      <div class="kv"><span>Graphics acceleration (WebGPU)</span><span id="kvGpu">Checking…</span></div>
+    </div>
+
+    <div class="setting">
+      <span class="label">Your writing</span>
+      <span class="hint">Essays are stored only on this phone. Export your book regularly as a backup.</span>
+    </div>
+  </section>
+</div>
+
+<nav class="tabs" aria-label="Sections">
+  <button data-tab="speak" aria-current="page"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Speak</button>
+  <button data-tab="library"><svg viewBox="0 0 24 24"><path d="M5 4h4v16H5zM10 4h4v16h-4zM15.5 5l3.6-1 3.2 15.5-3.6 1z"/></svg>Library</button>
+  <button data-tab="book"><svg viewBox="0 0 24 24"><path d="M12 6c-2-1.5-5-2-8-1.5v14c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5v-14c-3-.5-6 0-8 1.5zM12 6v14"/></svg>Book</button>
+  <button data-tab="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Engine</button>
+</nav>
+
+<script type="module">
+// ---------- small helpers ----------
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } },
+};
+const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const isArabic = (s) => { const ar = (s.match(/[؀-ۿ]/g) || []).length; const lat = (s.match(/[A-Za-z]/g) || []).length; return ar > lat; };
+const fmtDate = (t) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+const fmtMB = (b) => b > 1e9 ? (b / 1e9).toFixed(2) + ' GB' : Math.round(b / 1e6) + ' MB';
+let toastT;
+function toast(msg) {
+  let t = $('.toast'); if (!t) { t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); document.body.append(t); }
+  t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), 2400);
+}
+
+// ---------- settings & data ----------
+const STYLES = {
+  reflective: { name: 'Reflective essay', blurb: 'First person, candid, from a lived moment to a wider truth',
+    desc: 'a reflective personal essay in the tradition of Montaigne: first person, candid and searching, moving from concrete experience toward a general insight, comfortable with doubt' },
+  stoic: { name: 'Stoic meditation', blurb: 'Calm notes to oneself on what is in your control',
+    desc: 'a Stoic meditation in the manner of Marcus Aurelius\'s private notebooks: the writer addresses himself as "you", calm and disciplined, short paragraphs, returning to what is within one\'s control, to duty, impermanence and character' },
+  socratic: { name: 'Socratic inquiry', blurb: 'Pose a question, test it, answer objections',
+    desc: 'a Socratic inquiry: state the central question, examine what key words really mean, raise the strongest objections and answer them honestly, and end with a tentative, earned conclusion' },
+  aphoristic: { name: 'Aphorisms', blurb: 'Dense, numbered reflections in the vein of Pascal',
+    desc: 'a sequence of numbered aphorisms and short reflections in the vein of Pascal\'s Pensées: each one dense, precise and memorable, together building one line of thought' },
+};
+const LENGTH = { short: { words: 300, tokens: 700 }, medium: { words: 600, tokens: 1300 }, long: { words: 1000, tokens: 2000 } };
+
+const settings = Object.assign(
+  { spoken: 'en', style: 'reflective', length: 'medium', out: 'same', asr: 'base', llm: '1.5B', bookTitle: 'Notes Toward a Philosophy', bookNewest: false },
+  store.get('daftar.settings', {})
+);
+const saveSettings = () => store.set('daftar.settings', settings);
+let entries = store.get('daftar.entries', []);
+const saveEntries = () => { if (!store.set('daftar.entries', entries)) toast('Could not save: phone storage is full'); };
+let prepared = store.get('daftar.prepared', { asr: null, llm: null });
+
+// ---------- environment ----------
+let gpuInfo = { ok: false, f16: false };
+async function checkGPU() {
+  try {
+    if (!navigator.gpu) return;
+    const a = await navigator.gpu.requestAdapter();
+    if (a) gpuInfo = { ok: true, f16: a.features.has('shader-f16') };
+  } catch {}
+}
+function envNotices() {
+  const box = $('#envNotice'); const msgs = [];
+  if (!window.isSecureContext) msgs.push(['Open Daftar from its web address', 'The microphone and offline mode only work when the app is opened from an https:// address, not as a local file.']);
+  else if (!gpuInfo.ok) msgs.push(['The writer needs WebGPU', 'Voice transcription will still work, but writing the essay needs iOS 26 or later. On older iOS, turn on WebGPU in Settings › Apps › Safari › Advanced › Feature Flags.']);
+  if (!window.MediaRecorder) msgs.push(['Recording is not supported here', 'Please update iOS or open Daftar in Safari.']);
+  box.innerHTML = msgs.map(([a, b]) => `<div class="notice warn"><strong>${esc(a)}</strong>${esc(b)}</div>`).join('');
+  box.hidden = !msgs.length;
+}
+function llmId() { return `Qwen2.5-${settings.llm}-Instruct-${gpuInfo.f16 ? 'q4f16_1' : 'q4f32_1'}-MLC`; }
+function isPrepared() { return prepared.asr === settings.asr && prepared.llm === llmId(); }
+function refreshEngineStatus() {
+  const s = $('#engineStatus'); const ok = isPrepared();
+  s.classList.toggle('ready', ok); s.lastElementChild.textContent = ok ? 'Works offline' : 'Not prepared';
+  $('#prepCard').hidden = ok;
+  $('#kvAsr').textContent = prepared.asr ? (prepared.asr === 'small' ? 'Better Arabic' : 'Standard') + ' · ready' : 'Not downloaded';
+  $('#kvLlm').textContent = prepared.llm ? prepared.llm.replace('-Instruct', '').replace(/-q4.*$/, '') + ' · ready' : 'Not downloaded';
+  $('#kvGpu').textContent = gpuInfo.ok ? 'Available' : 'Not available';
+  if (navigator.storage?.estimate) navigator.storage.estimate().then((e) => ($('#kvStorage').textContent = fmtMB(e.usage || 0))).catch(() => {});
+}
+
+// ---------- segmented controls ----------
+function bindSeg(id, key, after) {
+  const seg = $('#' + id);
+  const sync = () => $$('button', seg).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === settings[key])));
+  seg.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; settings[key] = b.dataset.v; saveSettings(); sync(); after?.(); });
+  sync();
+}
+bindSeg('segSpoken', 'spoken'); bindSeg('segLength', 'length'); bindSeg('segOut', 'out');
+bindSeg('segAsr', 'asr', refreshEngineStatus); bindSeg('segLlm', 'llm', refreshEngineStatus);
+$('#styleGrid').innerHTML = Object.entries(STYLES).map(([k, s]) => `<button class="style-card" data-v="${k}"><b>${s.name}</b><span>${s.blurb}</span></button>`).join('');
+(function () {
+  const g = $('#styleGrid');
+  const sync = () => $$('.style-card', g).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === settings.style)));
+  g.addEventListener('click', (e) => { const b = e.target.closest('.style-card'); if (!b) return; settings.style = b.dataset.v; saveSettings(); sync(); });
+  sync();
+})();
+
+// ---------- tabs ----------
+function show(view) {
+  for (const v of ['speak', 'library', 'reader', 'book', 'settings']) $('#view-' + v).hidden = v !== view;
+  const tab = view === 'reader' ? 'library' : view;
+  $$('nav.tabs button').forEach((b) => (b.dataset.tab === tab ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current')));
+  if (view === 'library') renderLibrary();
+  if (view === 'book') renderBook();
+  if (view === 'settings') refreshEngineStatus();
+  window.scrollTo(0, 0);
+}
+$$('nav.tabs button').forEach((b) => b.addEventListener('click', () => show(b.dataset.tab)));
+document.addEventListener('click', (e) => { const g = e.target.closest('[data-go]'); if (g) show(g.dataset.go); });
+
+// ---------- progress UI ----------
+function progress(prefix, label, frac, valText) {
+  const wrap = $('#' + prefix + (prefix === 'prep' ? 'Progress' : 'ress'));
+  wrap.hidden = false;
+  $('#' + prefix + 'Label').textContent = label;
+  const bar = $('#' + prefix + 'Bar');
+  if (frac == null) { bar.classList.add('indet'); bar.firstElementChild.style.width = ''; }
+  else { bar.classList.remove('indet'); bar.firstElementChild.style.width = Math.round(frac * 100) + '%'; }
+  $('#' + prefix + 'Val').textContent = valText ?? (frac == null ? '' : Math.round(frac * 100) + '%');
+}
+const hideProgress = (prefix) => ($('#' + prefix + (prefix === 'prep' ? 'Progress' : 'ress')).hidden = true);
+
+// ---------- speech-to-text worker ----------
+let worker = null; let reqId = 0; const pending = new Map();
+function getWorker() {
+  if (worker) return worker;
+  worker = new Worker('asr-worker.js', { type: 'module' });
+  worker.onmessage = (e) => {
+    const { id, type, data, error } = e.data; const p = pending.get(id); if (!p) return;
+    if (type === 'progress') p.onProgress?.(data);
+    else if (type === 'done') { pending.delete(id); p.res(data); }
+    else if (type === 'error') { pending.delete(id); p.rej(new Error(error)); }
+  };
+  worker.onerror = (e) => { for (const [, p] of pending) p.rej(new Error(e.message || 'Transcription engine failed to start')); pending.clear(); };
+  return worker;
+}
+function asrCall(msg, onProgress) {
+  const w = getWorker();
+  return new Promise((res, rej) => {
+    const id = ++reqId; pending.set(id, { res, rej, onProgress });
+    w.postMessage({ ...msg, id }, msg.audio ? [msg.audio.buffer] : []);
+  });
+}
+
+// ---------- writer (on-device LLM) ----------
+let webllm = null, engine = null, engineModel = null;
+async function loadWriter(onProgress) {
+  if (!gpuInfo.ok) throw new Error('This iPhone has no WebGPU, so the writer cannot run. Update to iOS 26 or later.');
+  const id = llmId();
+  if (engine && engineModel === id) return engine;
+  if (engine) { try { await engine.unload(); } catch {} engine = null; engineModel = null; }
+  webllm = webllm || (await import('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.79/+esm'));
+  engine = await webllm.CreateMLCEngine(id, { initProgressCallback: (r) => onProgress?.(r) });
+  engineModel = id;
+  return engine;
+}
+async function unloadWriter() { if (engine) { try { await engine.unload(); } catch {} engine = null; engineModel = null; } }
+
+// ---------- one-time download ----------
+$('#prepareBtn').addEventListener('click', async () => {
+  const btn = $('#prepareBtn'); btn.disabled = true;
+  try { await navigator.storage?.persist?.(); } catch {}
+  try {
+    await unloadWriter();
+    progress('prep', 'Downloading the transcription model', 0);
+    await asrCall({ type: 'load', model: settings.asr }, (p) => progress('prep', 'Downloading the transcription model', p.loaded / p.total, `${fmtMB(p.loaded)} of ${fmtMB(p.total)}`));
+    prepared.asr = settings.asr; store.set('daftar.prepared', prepared);
+    await asrCall({ type: 'unload' });
+    if (gpuInfo.ok) {
+      progress('prep', 'Downloading the writing model', 0);
+      await loadWriter((r) => progress('prep', 'Downloading the writing model', r.progress, Math.round((r.progress || 0) * 100) + '%'));
+      prepared.llm = llmId(); store.set('daftar.prepared', prepared);
+    }
+    progress('prep', gpuInfo.ok ? 'Ready. Daftar now works offline.' : 'Transcription is ready. The writer needs WebGPU.', 1, '');
+    toast('Offline engine ready');
+  } catch (err) {
+    progress('prep', 'Download stopped: ' + err.message + '. Check your connection and try again.', 0, '');
+  } finally { btn.disabled = false; refreshEngineStatus(); }
+});
+
+// ---------- recording ----------
+let rec = null, chunks = [], stream = null, t0 = 0, tick = null, actx = null, raf = null, wake = null;
+const recBtn = $('#recBtn');
+recBtn.addEventListener('click', async () => { if (rec && rec.state === 'recording') await finishRecording(); else await startRecording(); });
+
+async function startRecording() {
+  if (!window.MediaRecorder) return toast('Recording is not supported in this browser');
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
+  catch { return toast('Allow microphone access in Settings › Safari to record'); }
+  const mime = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'].find((m) => MediaRecorder.isTypeSupported(m));
+  rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+  chunks = []; rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+  rec.start(1000);
+  t0 = Date.now(); tick = setInterval(updateTimer, 250); updateTimer();
+  recBtn.classList.add('on'); recBtn.setAttribute('aria-label', 'Stop listening');
+  $('#recCaption').textContent = 'Listening. Tap to stop.';
+  try { wake = await navigator.wakeLock?.request('screen'); } catch {}
+  try {
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+    const an = actx.createAnalyser(); an.fftSize = 512; actx.createMediaStreamSource(stream).connect(an);
+    const buf = new Float32Array(an.fftSize);
+    const loop = () => { an.getFloatTimeDomainData(buf); let s = 0; for (const v of buf) s += v * v; const rms = Math.sqrt(s / buf.length);
+      recBtn.style.setProperty('--lvl', (1 + Math.min(rms * 4, 0.35)).toFixed(3)); raf = requestAnimationFrame(loop); };
+    loop();
+  } catch {}
+}
+function updateTimer() { const s = Math.floor((Date.now() - t0) / 1000); $('#timer').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
+function stopRecorder() {
+  return new Promise((res) => {
+    rec.onstop = () => { stream.getTracks().forEach((t) => t.stop()); res(new Blob(chunks, { type: rec.mimeType || 'audio/mp4' })); };
+    rec.stop();
+  });
+}
+async function finishRecording() {
+  const blob = await stopRecorder();
+  clearInterval(tick); cancelAnimationFrame(raf); try { actx?.close(); } catch {} try { wake?.release(); } catch {}
+  recBtn.classList.remove('on'); recBtn.style.removeProperty('--lvl'); recBtn.setAttribute('aria-label', 'Start listening');
+  $('#recCaption').textContent = 'Tap to start. Think out loud. Tap again when you\'re done.';
+  await transcribe(blob);
+}
+
+async function toMono16k(blob) {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
+  try { ctx.close(); } catch {}
+  const off = new OfflineAudioContext(1, Math.max(1, Math.ceil(decoded.duration * 16000)), 16000);
+  const src = off.createBufferSource(); src.buffer = decoded; src.connect(off.destination); src.start();
+  const out = await off.startRendering();
+  return new Float32Array(out.getChannelData(0));
+}
+
+// ---------- the flow ----------
+let current = null; // entry being worked on
+function setStage(stage) {
+  $('#composer').hidden = stage !== 'idle';
+  $('#work').hidden = stage === 'idle';
+  $('#transcriptBox').hidden = stage !== 'transcript';
+  $('#livePage').hidden = !(stage === 'writing' || stage === 'written');
+  $('#afterWrite').hidden = stage !== 'written';
+  if (stage !== 'busy' && stage !== 'writing') hideProgress('prog');
+}
+
+async function transcribe(blob) {
+  setStage('busy'); progress('prog', 'Preparing audio', null);
+  recBtn.disabled = true;
+  try {
+    const audio = await toMono16k(blob);
+    if (audio.length < 16000) throw new Error('That recording was too short. Try speaking for a few seconds.');
+    await unloadWriter(); // free memory for transcription
+    const label = prepared.asr === settings.asr ? 'Transcribing on your phone' : 'Downloading the transcription model';
+    progress('prog', label, null);
+    const language = settings.spoken === 'en' ? 'english' : settings.spoken === 'ar' ? 'arabic' : undefined;
+    const text = await asrCall({ type: 'transcribe', audio, model: settings.asr, language },
+      (p) => progress('prog', 'Downloading the transcription model', p.loaded / p.total, `${fmtMB(p.loaded)} of ${fmtMB(p.total)}`));
+    if (prepared.asr !== settings.asr) { prepared.asr = settings.asr; store.set('daftar.prepared', prepared); refreshEngineStatus(); }
+    if (!text) throw new Error('No speech was detected. Check the microphone and try again.');
+    $('#transcript').value = text;
+    store.set('daftar.draft', text);
+    setStage('transcript');
+  } catch (err) {
+    setStage('idle'); toast(err.message);
+  } finally { recBtn.disabled = false; }
+}
+
+function outLang(transcript) {
+  if (settings.out === 'en') return 'en';
+  if (settings.out === 'ar') return 'ar';
+  return isArabic(transcript) ? 'ar' : 'en';
+}
+function systemPrompt(lang, styleKey, lengthKey) {
+  const st = STYLES[styleKey]; const L = LENGTH[lengthKey];
+  const langLine = lang === 'ar'
+    ? 'Write entirely in eloquent Modern Standard Arabic (الفصحى), with a literary, book-like voice, even if the speaker used dialect or English words.'
+    : 'Write entirely in polished literary English, even if the speaker mixed in other languages.';
+  return `You are a skilled literary editor. You turn a person's spoken, unpolished thoughts into ${st.desc}.
+Rules:
+- Keep every idea and the speaker's own point of view. Do not invent facts, events, people or quotations.
+- You may deepen the reasoning, find the thread that connects the ideas, and choose better words.
+- Remove filler, repetition, false starts and verbal tics.
+- ${langLine}
+- Length: about ${L.words} words.
+- Start with a short, evocative title on the first line, written as "# Title". Then the essay itself.
+- No preface, no notes, no commentary about the task.`;
+}
+
+async function condense(eng, text, lang) {
+  // For long recordings: compress each part into faithful notes, then write from the notes.
+  const size = lang === 'ar' ? 3500 : 5500;
+  if (text.length <= size) return text;
+  const parts = []; let i = 0;
+  while (i < text.length) { let end = Math.min(text.length, i + size); const dot = text.lastIndexOf('.', end); if (dot > i + size * 0.6 && end < text.length) end = dot + 1; parts.push(text.slice(i, end)); i = end; }
+  const notes = [];
+  for (let k = 0; k < parts.length; k++) {
+    progress('prog', `Reading your thoughts (part ${k + 1} of ${parts.length})`, k / parts.length);
+    const r = await eng.chat.completions.create({
+      messages: [
+        { role: 'system', content: 'Condense this part of a spoken monologue into faithful, detailed notes. Keep every distinct idea, example and feeling. Write the notes in the same language as the speaker. No commentary.' },
+        { role: 'user', content: parts[k] },
+      ], temperature: 0.3, max_tokens: 500,
+    });
+    notes.push(r.choices[0]?.message?.content || '');
+  }
+  return notes.join('\n\n');
+}
+
+async function write(transcript, entryToReplace = null) {
+  const lang = outLang(transcript);
+  const style = settings.style, length = settings.length;
+  setStage('writing');
+  const page = $('#livePage'); page.innerHTML = ''; page.lang = lang; page.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  try {
+    await asrCall({ type: 'unload' }).catch(() => {}); // free memory for the writer
+    const downloading = prepared.llm !== llmId();
+    progress('prog', downloading ? 'Downloading the writing model' : 'Opening the writer', 0);
+    const eng = await loadWriter((r) => progress('prog', downloading ? 'Downloading the writing model' : 'Opening the writer', r.progress));
+    if (downloading) { prepared.llm = llmId(); store.set('daftar.prepared', prepared); refreshEngineStatus(); }
+    const source = await condense(eng, transcript, lang);
+    progress('prog', 'Writing', null);
+    const chunksIter = await eng.chat.completions.create({
+      messages: [
+        { role: 'system', content: systemPrompt(lang, style, length) },
+        { role: 'user', content: `My spoken thoughts:\n\n"""\n${source}\n"""` },
+      ],
+      stream: true, temperature: 0.75, top_p: 0.9, frequency_penalty: 0.3, max_tokens: LENGTH[length].tokens,
+    });
+    let out = '';
+    for await (const c of chunksIter) { out += c.choices[0]?.delta?.content || ''; renderEssay(page, out, true); }
+    out = out.trim();
+    renderEssay(page, out, false);
+    hideProgress('prog');
+    const { title } = parseEssay(out);
+    const now = Date.now();
+    if (entryToReplace) {
+      Object.assign(entryToReplace, { essay: out, title, style, lang, updated: now });
+      current = entryToReplace;
+    } else {
+      current = { id: 'e' + now, created: now, transcript, essay: out, title, style, lang };
+      entries.push(current);
+    }
+    saveEntries(); store.set('daftar.draft', null);
+    setStage('written');
+  } catch (err) {
+    setStage('transcript'); toast(err.message);
+  }
+}
+
+$('#writeBtn').addEventListener('click', () => { const t = $('#transcript').value.trim(); if (t) write(t); else toast('The transcript is empty'); });
+$('#saveRawBtn').addEventListener('click', () => {
+  const t = $('#transcript').value.trim(); if (!t) return;
+  const now = Date.now(); const lang = isArabic(t) ? 'ar' : 'en';
+  entries.push({ id: 'e' + now, created: now, transcript: t, essay: '', title: t.split(/\s+/).slice(0, 6).join(' ') + '…', style: null, lang });
+  saveEntries(); store.set('daftar.draft', null); toast('Saved to library'); setStage('idle');
+});
+$('#discardBtn').addEventListener('click', () => { store.set('daftar.draft', null); setStage('idle'); });
+$('#newBtn').addEventListener('click', () => { current = null; setStage('idle'); $('#timer').textContent = '0:00'; });
+$('#rewriteBtn').addEventListener('click', () => { if (current) write(current.transcript, current); });
+$('#openSavedBtn').addEventListener('click', () => { if (current) openReader(current.id); });
+
+// ---------- rendering essays ----------
+function parseEssay(text) {
+  const lines = text.replace(/\r/g, '').split('\n');
+  let title = ''; const body = [];
+  for (const raw of lines) {
+    const l = raw.trim();
+    if (!title && /^#\s+/.test(l)) { title = l.replace(/^#+\s*/, '').replace(/\*+/g, ''); continue; }
+    body.push(raw);
+  }
+  if (!title) { const first = text.trim().split(/[.\n؟?!]/)[0]; title = first.split(/\s+/).slice(0, 7).join(' '); }
+  return { title, body: body.join('\n').trim() };
+}
+function inline(s) { return esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>'); }
+function essayHTML(text) {
+  const { title, body } = parseEssay(text);
+  const blocks = body.split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean);
+  const parts = blocks.map((b) => /^#{2,}\s+/.test(b) ? `<h3>${inline(b.replace(/^#+\s*/, ''))}</h3>` : `<p>${inline(b).replace(/\n/g, '<br>')}</p>`);
+  return { title, html: `<h1>${inline(title)}</h1>${parts.join('')}` };
+}
+function renderEssay(el, text, streaming) {
+  el.innerHTML = essayHTML(text || '').html + (streaming ? '<span class="caret"></span>' : '');
+}
+
+// ---------- library & reader ----------
+function renderLibrary() {
+  const box = $('#libList');
+  if (!entries.length) { box.innerHTML = '<div class="empty"><b>Nothing here yet</b>Record your first thought on the Speak tab.</div>'; return; }
+  const sorted = [...entries].sort((a, b) => b.created - a.created);
+  box.innerHTML = '<div class="list">' + sorted.map((e) => {
+    const excerpt = parseEssay(e.essay || e.transcript).body.replace(/\s+/g, ' ').slice(0, 180);
+    const chip = e.style ? `<span class="chip">${STYLES[e.style]?.name || ''}</span>` : '<span class="chip">Note</span>';
+    return `<button class="item" data-id="${e.id}"><span class="t" lang="${e.lang}" dir="auto">${esc(e.title || 'Untitled')}</span><span class="d">${fmtDate(e.created)}</span><span class="x" dir="auto">${chip}${esc(excerpt)}</span></button>`;
+  }).join('') + '</div>';
+}
+$('#libList').addEventListener('click', (e) => { const b = e.target.closest('.item'); if (b) openReader(b.dataset.id); });
+
+let readerId = null;
+function openReader(id) {
+  const e = entries.find((x) => x.id === id); if (!e) return;
+  readerId = id; show('reader');
+  const page = $('#readerPage'); page.lang = e.lang; page.dir = e.lang === 'ar' ? 'rtl' : 'ltr';
+  const meta = `<div class="meta">${fmtDate(e.created)}${e.style ? ' · ' + STYLES[e.style].name : ' · Note'}</div>`;
+  page.innerHTML = meta + (e.essay ? essayHTML(e.essay).html : `<h1>${esc(e.title)}</h1><p>${esc(e.transcript)}</p>`);
+  page.hidden = false; $('#readerEdit').hidden = true; $('#editBtn').textContent = 'Edit';
+  $('#readerTranscript').textContent = e.transcript;
+  $('#readerRewriteBtn').textContent = e.essay ? 'Rewrite' : 'Write essay';
+  $('#deleteConfirm').hidden = true;
+}
+$('#backBtn').addEventListener('click', () => show('library'));
+const readerEntry = () => entries.find((x) => x.id === readerId);
+function plainText(e) { const { title, body } = parseEssay(e.essay || e.transcript); return `${title}\n\n${body.replace(/\*\*?/g, '')}`; }
+$('#copyBtn').addEventListener('click', async () => {
+  const e = readerEntry(); if (!e) return;
+  try { await navigator.clipboard.writeText(plainText(e)); toast('Copied'); } catch { toast('Copy failed. Select the text and copy it instead.'); }
+});
+$('#shareBtn').addEventListener('click', async () => {
+  const e = readerEntry(); if (!e) return;
+  if (navigator.share) { try { await navigator.share({ title: e.title, text: plainText(e) }); } catch {} }
+  else { try { await navigator.clipboard.writeText(plainText(e)); toast('Sharing is unavailable, so the text was copied'); } catch {} }
+});
+$('#editBtn').addEventListener('click', () => {
+  const e = readerEntry(); if (!e) return; const ed = $('#readerEdit');
+  if (ed.hidden) { ed.value = e.essay || e.transcript; ed.hidden = false; $('#readerPage').hidden = true; $('#editBtn').textContent = 'Save'; }
+  else {
+    const v = ed.value.trim();
+    if (e.essay) e.essay = v; else e.transcript = v;
+    e.title = parseEssay(v).title; e.updated = Date.now(); saveEntries(); openReader(e.id); toast('Saved');
+  }
+});
+$('#readerRewriteBtn').addEventListener('click', () => {
+  const e = readerEntry(); if (!e) return;
+  show('speak'); $('#transcript').value = e.transcript; write(e.transcript, e);
+});
+$('#deleteBtn').addEventListener('click', () => ($('#deleteConfirm').hidden = false));
+$('#deleteNo').addEventListener('click', () => ($('#deleteConfirm').hidden = true));
+$('#deleteYes').addEventListener('click', () => { entries = entries.filter((x) => x.id !== readerId); saveEntries(); toast('Deleted'); show('library'); });
+
+// ---------- book ----------
+const ROMAN = (n) => { const m = [[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']]; let r = ''; for (const [v, s] of m) while (n >= v) { r += s; n -= v; } return r; };
+const chapters = () => entries.filter((e) => e.essay).sort((a, b) => settings.bookNewest ? b.created - a.created : a.created - b.created);
+function renderBook() {
+  $('#bookTitle').value = settings.bookTitle;
+  $('#bookOrder').textContent = settings.bookNewest ? 'Oldest first' : 'Newest first';
+  const ch = chapters();
+  $('#bookCount').textContent = ch.length ? `${ch.length} chapter${ch.length > 1 ? 's' : ''} · ${ch.reduce((n, e) => n + e.essay.split(/\s+/).length, 0).toLocaleString()} words` : 'Your essays become chapters here.';
+  $('#bookBody').innerHTML = ch.map((e, i) => `<article class="page" lang="${e.lang}" dir="${e.lang === 'ar' ? 'rtl' : 'ltr'}"><div class="chapter-no">Chapter ${ROMAN(i + 1)}</div>${essayHTML(e.essay).html}</article>`).join('');
+}
+$('#bookTitle').addEventListener('input', (e) => { settings.bookTitle = e.target.value; saveSettings(); });
+$('#bookOrder').addEventListener('click', () => { settings.bookNewest = !settings.bookNewest; saveSettings(); renderBook(); });
+
+async function deliverFile(name, type, content) {
+  const file = new File([content], name, { type });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: settings.bookTitle }); return; } catch (err) { if (err.name === 'AbortError') return; } }
+  const url = URL.createObjectURL(file); const a = document.createElement('a'); a.href = url; a.download = name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+const safeName = () => (settings.bookTitle || 'Daftar').replace(/[^\p{L}\p{N} _-]/gu, '').trim().replace(/\s+/g, '-') || 'Daftar';
+$('#exportTxt').addEventListener('click', () => {
+  const ch = chapters(); if (!ch.length) return toast('Write an essay first');
+  const txt = `${settings.bookTitle}\n\n` + ch.map((e, i) => `Chapter ${ROMAN(i + 1)}\n\n${plainText(e)}`).join('\n\n* * *\n\n');
+  deliverFile(safeName() + '.txt', 'text/plain', txt);
+});
+$('#exportHtml').addEventListener('click', () => {
+  const ch = chapters(); if (!ch.length) return toast('Write an essay first');
+  const body = ch.map((e, i) => `<section lang="${e.lang}" dir="${e.lang === 'ar' ? 'rtl' : 'ltr'}"><div class="no">Chapter ${ROMAN(i + 1)}</div>${essayHTML(e.essay).html}</section>`).join('');
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(settings.bookTitle)}</title>
+<style>body{font:19px/1.75 Georgia,"Times New Roman",serif;color:#1c2230;background:#fff;max-width:36em;margin:0 auto;padding:3em 1.2em}
+.cover{text-align:center;padding:30vh 0;page-break-after:always}.cover h1{font-size:2.4em;font-weight:normal;margin:0}
+section{page-break-before:always;margin-top:4em}.no{font:12px sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#777}
+h1{font-weight:normal;font-size:1.7em;line-height:1.25}section[lang=ar]{font-family:"Geeza Pro","Amiri","Traditional Arabic",serif;font-size:1.15em;line-height:1.95}</style></head>
+<body><div class="cover"><h1>${esc(settings.bookTitle)}</h1></div>${body}</body></html>`;
+  deliverFile(safeName() + '.html', 'text/html', html);
+});
+
+// ---------- start ----------
+await checkGPU();
+envNotices();
+refreshEngineStatus();
+setStage('idle');
+const draft = store.get('daftar.draft', null);
+if (draft) { $('#transcript').value = draft; setStage('transcript'); toast('Your last unsaved transcript was restored'); }
+if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
